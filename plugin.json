@@ -1,0 +1,22 @@
+{
+  "id": "neodex.bulles",
+  "name": "Bulles",
+  "version": "1.0.0",
+  "author": "NDesumeur",
+  "description": "Vise et tire des bulles : trois de la même couleur éclatent, et celles qui ne tiennent plus à rien tombent.",
+  "icon": "icon.png",
+  "entry": "index.js",
+  "view": "bulles",
+  "neobase": ">=4.0.0",
+  "type": "app",
+  "category": "Jeux",
+  "syncMode": "progression",
+  "syncInfo": "Meilleur score, bulles éclatées.",
+  "mobile": false,
+  "system": false,
+  "dependencies": {},
+  "sdk": "2.1.0",
+  "permissions": [
+    "storage"
+  ]
+}
