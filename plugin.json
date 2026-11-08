@@ -3,7 +3,7 @@
   "name": "Bulles",
   "version": "1.0.0",
   "author": "NDesumeur",
-  "description": "Vise et tire des bulles : trois de la même couleur éclatent, et celles qui ne tiennent plus à rien tombent.",
+  "description": "Jeu de tir de bulles : vise à la souris (le pointillé montre les rebonds), tire, et regroupe au moins trois bulles de la même couleur pour les faire éclater ; tout ce qui ne tient plus au plafond tombe et rapporte gros. Le plafond descend tous les 7 tirs, X échange la bulle avec la suivante, et chaque plateau vidé en amène un nouveau avec une couleur de plus.",
   "icon": "icon.png",
   "entry": "index.js",
   "view": "bulles",
