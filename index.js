@@ -1,13 +1,13 @@
 // Bulles : Vise et tire des bulles : trois de la même couleur éclatent, et celles qui ne tiennent plus à rien tombent.
 // Jeu NeoDex en pixel art dessiné à la main (police bitmap, cadres et boutons en pixels). Il tourne dans le bac à sable de NeoDex.
 const HTML = `<div class="appWrap wide">
-  <div class="agHead"><span class="label">Bulles</span><span class="hint">Souris : viser · clic : tirer · X : échanger la bulle</span></div>
+  <div class="agHead"><span class="label">Bulles</span><span class="hint">Souris : viser · clic : tirer · X : échanger la bulle · manette : stick pour viser, A pour tirer, X pour échanger</span></div>
   <div class="gMain"><div class="gameBox"><canvas id="gc" width="184" height="256"></canvas></div>
     <div class="gSide">
       <div class="sysCard"><b>RECORDS</b><div class="gStats" id="gStats"></div></div>
-      <div class="row"><button class="btn main" id="gNew">NOUVELLE PARTIE</button></div>
-      
-      <div class="hint">Le pointillé montre la trajectoire, rebonds sur les bords compris.</div><div class="hint">Tous les 7 tirs, le plafond descend d'une rangée. Fais tomber des grappes entières pour marquer gros.</div>
+      <div class="row"><button class="btn main" id="gNew">NOUVELLE PARTIE</button><button class="btn" id="gFs">PLEIN ÉCRAN</button></div>
+      <div class="hint">Le pointillé montre la trajectoire, rebonds sur les bords compris.</div><div class="hint">Tous les 7 tirs, le plafond descend d'une rangée. Fais tomber plusieurs grappes d'un coup pour un combo.</div>
+      <div class="hint">Bulles spéciales : la bombe fait sauter tout ce qui l'entoure, l'arc-en-ciel prend la couleur qui l'arrange, la pierre ne casse jamais (il faut la faire tomber).</div>
     </div></div>
 </div>`;
 const CSS = `.gMain{display:flex;gap:22px;align-items:flex-start;flex-wrap:wrap}
@@ -17,7 +17,9 @@ const CSS = `.gMain{display:flex;gap:22px;align-items:flex-start;flex-wrap:wrap}
 .gSide .sysCard{display:flex;flex-direction:column}
 .gStats{display:grid;grid-template-columns:1fr auto;gap:4px 14px}
 .gStats b{text-align:right}
-.gameBox canvas{max-width:420px;aspect-ratio:184/256}`;
+.gameBox canvas{width:min(100%,max(240px,calc((100vh - 200px) * 184 / 256)));height:auto;aspect-ratio:184/256}
+.gameBox:fullscreen{padding:0;display:grid;place-items:center}
+.gameBox:fullscreen canvas{width:min(100vw,calc(100vh * 184 / 256))}`;
 /* ---------- l'habillage pixel art, dessiné à la main : police bitmap (accents compris), cadres, boutons, icônes ----------
    Tout est en pixels pleins, agrandis par 2 sans lissage : aucun dégradé, aucune ombre floue. */
 const PXK = (() => {
@@ -328,40 +330,92 @@ let actx = null;
 const beep = (f, d = .1, type = 'square', slide = 0, vol = .08) => { try { actx ??= new AudioContext(); const o = actx.createOscillator(), gn = actx.createGain(), t = actx.currentTime; o.type = type; o.frequency.setValueAtTime(f, t); if (slide) o.frequency.exponentialRampToValueAtTime(slide, t + d); gn.gain.setValueAtTime(vol, t); gn.gain.exponentialRampToValueAtTime(.0001, t + d); o.connect(gn).connect(actx.destination); o.start(t); o.stop(t + d + .02); } catch {} };
 const keyOk = e => view.classList.contains('on') && !/INPUT|SELECT|TEXTAREA/.test(e.target.tagName);
 const showStats = rows => $('gStats').replaceChildren(...rows.flatMap(([a, b]) => [el('span', '', a), el('b', '', String(b))]));
-/* ---------- Bulles : viser et tirer des bulles ; trois de la même couleur éclatent, et celles qui ne tiennent plus à rien tombent ---------- */
-const BU = {R: 7, D: 14, COLS: 12, X0: 8, Y0: 18, ROWH: 12, SPEED: 4.2, DEAD: 214};
+/* ---------- Bulles : viser et tirer des bulles ; trois de la même couleur éclatent, et celles qui ne tiennent plus à rien tombent ----------
+   Valeurs d'une case : -1 vide, 0 à 5 les couleurs, 9 la pierre (ne casse jamais). Bulles à tirer en plus : 7 la bombe, 8 l'arc-en-ciel. */
+const BU = {R: 7, D: 14, COLS: 12, X0: 8, Y0: 18, ROWH: 12, SPEED: 4.2, DEAD: 214, BOMB: 7, RAIN: 8, STONE: 9};
 const BU_COL = [['#ff4a5a', '#ffb0b8', '#a02030'], ['#ffd84a', '#fff4b0', '#a07a10'], ['#5fdf6a', '#c8ffc8', '#2a8a3a'], ['#3f8aff', '#b0d0ff', '#1a4aa0'], ['#b07aff', '#e4d0ff', '#6a3ab0'], ['#ff9a3d', '#ffe0b0', '#a05a10']];
-const BU_SPR = BU_COL.map(([m, l, d]) => spr(['....kkkkkk....', '..kkmmmmmmkk..', '.kmllmmmmmmmk.', '.kmlwlmmmmmmk.', 'kmllmmmmmmmmdk', 'kmlmmmmmmmmmdk', 'kmmmmmmmmmmmdk', 'kmmmmmmmmmmmdk', 'kmmmmmmmmmmddk', 'kmmmmmmmmmmddk', '.kmmmmmmmmddk.', '.kmmmmmmmdddk.', '..kkddddddkk..', '....kkkkkk....'], {k: '#05010b', m, l, d, w: '#ffffff'}));
+// une bulle de verre : reflet blanc en haut à gauche, croissant clair dedans, lumière renvoyée en bas à droite, bord sombre du côté de l'ombre
+const BU_BALL = ['....kkkkkk....', '..kkmmmmmmkk..', '.kmmllllmmmmk.', '.kmlwwllmmmmk.', 'kmlwwlmmmmmmdk', 'kmllmmmmmmmmdk', 'kmlmmmmmmmmmdk', 'kmmmmmmmmmmmdk', 'kmmmmmmmmmmldk', 'kmmmmmmmmmlldk', '.kmmmmmmmlldk.', '.kdmmmmmmmddk.', '..kkddddddkk..', '....kkkkkk....'];
+const BU_SPR = BU_COL.map(([m, l, d]) => spr(BU_BALL, {k: '#05010b', m, l, d, w: '#ffffff'}));
+// l'arc-en-ciel : la même bulle en bandes de toutes les couleurs, qui défilent (6 images)
+const BU_RAIN = BU_COL.map((_, f) => cnv(14, 14, b => BU_BALL.forEach((r, y) => { for (let x = 0; x < 14; x++) { const ch = r[x], i = ((x + y + f * 2) >> 1) % 6, col = {k: '#05010b', w: '#ffffff', m: BU_COL[i][0], l: BU_COL[i][1], d: BU_COL[i][2]}[ch]; if (col) px(b, col, x, y); } })));
+// la bombe : boule noire à reflet, mèche et étincelle
+const BU_BOMB = spr(['.........y.o..', '........o.y...', '........f.....', '....kkkkfk....', '..kkbbbbbbkk..', '.kbbggbbbbbbk.', '.kbgwgbbbbbbk.', 'kbbggbbbbbbbbk', 'kbbbbbbbbbbbbk', 'kbbbbbbbbbbbbk', '.kbbbbbbbbbbk.', '.kbbbbbbbbbbk.', '..kkbbbbbbkk..', '....kkkkkk....'],
+  {k: '#05010b', b: '#2a2a3a', g: '#5a5a78', w: '#c8c8e0', f: '#8a6a3a', y: '#ffd84a', o: '#ff8a3a'});
+// la pierre : un caillou à facettes, fendu
+const BU_STONE = spr(['....kkkkk.....', '..kk44433kk...', '.k4433333322k.', 'k443333c33322k', 'k43333c333322k', 'k4333c3333222k', 'k33333c332222k', 'k3333333c2222k', 'k333333332221k', 'k23333332c221k', '.k2233322221k.', '.k1222222211k.', '..kk111111kk..', '....kkkkkk....'],
+  {k: '#05010b', 1: '#4a4640', 2: '#6a645a', 3: '#8e877a', 4: '#b8b0a0', c: '#2a2622'});
+const buImg = (v, t = 0) => v < 6 ? BU_SPR[v] : v === BU.BOMB ? BU_BOMB : v === BU.RAIN ? BU_RAIN[(t >> 3) % 6] : BU_STONE;
+const buLight = v => v < 6 ? BU_COL[v][1] : v === BU.STONE ? '#b8b0a0' : '#ffd84a';  // la couleur des gouttes quand elle éclate
 const bus = gstore('bulles', {games: 0, popped: 0});
 const buXY = (r, c, top) => [BU.X0 + c * BU.D + (r % 2) * BU.R + BU.R, BU.Y0 + top + r * BU.ROWH + BU.R];
 const buNb = (r, c) => { const o = r % 2; return [[r, c - 1], [r, c + 1], [r - 1, c - 1 + o], [r - 1, c + o], [r + 1, c - 1 + o], [r + 1, c + o]]; };
+const buCols = r => BU.COLS - (r % 2);
 let bu = null;
+function buFill(colors, stones) {  // six rangées de bulles, et quelques pierres plus bas (jamais sur la première rangée : elles doivent pouvoir tomber)
+  for (let r = 0; r < 6; r++) for (let c = 0; c < buCols(r); c++) bu.grid[r][c] = Math.floor(Math.random() * colors);
+  for (let k = 0; k < stones; k++) { const r = 2 + Math.floor(Math.random() * 4); bu.grid[r][Math.floor(Math.random() * buCols(r))] = BU.STONE; }
+}
 function buNew() {
   const grid = []; for (let r = 0; r < 18; r++) grid.push(Array(BU.COLS).fill(-1));
-  for (let r = 0; r < 6; r++) for (let c = 0; c < BU.COLS - (r % 2); c++) grid[r][c] = Math.floor(Math.random() * 4);
-  bu = Object.assign(bu || {tick: 0, raf: 0}, {mode: 'play', grid, top: 0, shots: 0, ang: -Math.PI / 2, cur: Math.floor(Math.random() * 4), next: Math.floor(Math.random() * 4), shot: null, falling: [], pops: [], score: 0, overAt: 0, colors: 4});
-  buInfo();
+  bu = Object.assign(bu || {tick: 0, raf: 0}, {mode: 'play', user: false, grid, top: 0, shots: 0, fired: 0, board: 1, ang: -Math.PI / 2, cur: Math.floor(Math.random() * 4), next: Math.floor(Math.random() * 4), shot: null, falling: [], pops: [], booms: [], texts: [], shake: 0, score: 0, overAt: 0, colors: 4});
+  buFill(4, 2); buInfo();
 }
-const buCols = r => BU.COLS - (r % 2);
-function buPresent() { const s = new Set(); bu.grid.forEach(r => r.forEach(v => { if (v >= 0) s.add(v); })); return [...s]; }
+function buPresent() { const s = new Set(); bu.grid.forEach(r => r.forEach(v => { if (v >= 0 && v < 6) s.add(v); })); return [...s]; }  // les couleurs encore là (pas les pierres)
 function buPick() { const p = buPresent(); return p.length ? p[Math.floor(Math.random() * p.length)] : Math.floor(Math.random() * bu.colors); }
-function buFire() { if (bu.mode !== 'play' || bu.shot) return; const [x, y] = [W / 2, BU.DEAD + 16]; bu.shot = {x, y, vx: Math.cos(bu.ang) * BU.SPEED, vy: Math.sin(bu.ang) * BU.SPEED, c: bu.cur}; bu.cur = bu.next; bu.next = buPick(); beep(520, .05, 'square', 780, .05); }
+function buFire() {
+  if (bu.mode !== 'play' || bu.shot) return; const [x, y] = [W / 2, BU.DEAD + 16];
+  bu.shot = {x, y, vx: Math.cos(bu.ang) * BU.SPEED, vy: Math.sin(bu.ang) * BU.SPEED, c: bu.cur}; bu.cur = bu.next; bu.fired++;
+  bu.next = bu.fired % 10 === 0 ? (bu.fired % 20 ? BU.BOMB : BU.RAIN) : buPick();  // tous les 10 tirs, une bulle spéciale : bombe, puis arc-en-ciel
+  beep(520, .05, 'square', 780, .05);
+}
+function buPop(a, b) { const [x, y] = buXY(a, b, bu.top), v = bu.grid[a][b]; bu.pops.push({x, y, c: v, t: 0, drops: Array.from({length: 7}, (_, i) => { const an = i / 7 * Math.PI * 2 + Math.random() * .5, sp = 1 + Math.random(); return [Math.cos(an) * sp, Math.sin(an) * sp - .6]; })}); bu.grid[a][b] = -1; }
+function buDrop() {  // ce qui ne tient plus au plafond tombe ; renvoie le nombre de bulles et de grappes séparées
+  const held = new Set(), q = []; for (let b = 0; b < buCols(0); b++) if (bu.grid[0][b] >= 0) { held.add('0,' + b); q.push([0, b]); }
+  while (q.length) { const [a, b] = q.pop(); for (const [x, y] of buNb(a, b)) if (bu.grid[x]?.[y] >= 0 && !held.has(x + ',' + y)) { held.add(x + ',' + y); q.push([x, y]); } }
+  const loose = new Map(); bu.grid.forEach((row, a) => row.forEach((v, b) => { if (v >= 0 && !held.has(a + ',' + b)) loose.set(a + ',' + b, [a, b]); }));
+  let comps = 0; const seen = new Set();
+  for (const [k, cell] of loose) { if (seen.has(k)) continue; comps++; seen.add(k); const st = [cell]; while (st.length) for (const [x, y] of buNb(...st.pop())) { const kk = x + ',' + y; if (loose.has(kk) && !seen.has(kk)) { seen.add(kk); st.push([x, y]); } } }
+  for (const [a, b] of loose.values()) { const [x, y] = buXY(a, b, bu.top); bu.falling.push({x, y, vy: -1 - Math.random(), vx: (Math.random() - .5) * .8, c: bu.grid[a][b]}); bu.grid[a][b] = -1; }
+  return [loose.size, comps];
+}
+const buSay = (x, y, txt, col, big = false) => bu.texts.push({x, y, txt, col, big, t: 0});
 function buSnap(s) {  // la bulle se range dans la case libre la plus proche, puis on cherche les groupes de trois
   let best = null, bd = 1e9;
   for (let r = 0; r < bu.grid.length; r++) for (let c = 0; c < buCols(r); c++) if (bu.grid[r][c] < 0) { const [x, y] = buXY(r, c, bu.top), d = Math.hypot(x - s.x, y - s.y); if (d < bd && (r === 0 || buNb(r, c).some(([a, b]) => bu.grid[a]?.[b] >= 0))) { bd = d; best = [r, c]; } }
-  if (!best) return; const [r, c] = best; bu.grid[r][c] = s.c;
-  const same = [best], seen = new Set([r + ',' + c]); for (let i = 0; i < same.length; i++) for (const [a, b] of buNb(...same[i])) if (bu.grid[a]?.[b] === s.c && !seen.has(a + ',' + b)) { seen.add(a + ',' + b); same.push([a, b]); }
-  if (same.length >= 3) {
-    for (const [a, b] of same) { const [x, y] = buXY(a, b, bu.top); bu.pops.push({x, y, c: bu.grid[a][b], t: 0}); bu.grid[a][b] = -1; }
-    const held = new Set(), q = []; for (let b = 0; b < buCols(0); b++) if (bu.grid[0][b] >= 0) { held.add('0,' + b); q.push([0, b]); }  // ce qui tient encore au plafond
-    while (q.length) { const [a, b] = q.pop(); for (const [x, y] of buNb(a, b)) if (bu.grid[x]?.[y] >= 0 && !held.has(x + ',' + y)) { held.add(x + ',' + y); q.push([x, y]); } }
-    let fell = 0; bu.grid.forEach((row, a) => row.forEach((v, b) => { if (v >= 0 && !held.has(a + ',' + b)) { const [x, y] = buXY(a, b, bu.top); bu.falling.push({x, y, vy: -1, c: v}); bu.grid[a][b] = -1; fell++; } }));
-    bu.score += same.length * 10 + fell * 20 * (1 + fell / 4); bus.popped += same.length + fell; beep(880, .08, 'triangle', 1320, .07); if (fell) setTimeout(() => beep(660, .15, 'triangle', 220, .06), 80);
+  if (!best) return; const [r, c] = best, [hx, hy] = buXY(r, c, bu.top);
+  const group = col => { bu.grid[r][c] = col; const same = [best], seen = new Set([r + ',' + c]); for (let i = 0; i < same.length; i++) for (const [a, b] of buNb(...same[i])) if (bu.grid[a]?.[b] === col && !seen.has(a + ',' + b)) { seen.add(a + ',' + b); same.push([a, b]); } return same; };
+  let gone = [];
+  if (s.c === BU.BOMB) {  // la bombe : tout ce qui est à deux bulles autour saute, pierres comprises
+    bu.grid[r][c] = BU.BOMB; bu.grid.forEach((row, a) => row.forEach((v, b) => { if (v >= 0) { const [x, y] = buXY(a, b, bu.top); if (Math.hypot(x - hx, y - hy) < BU.D * 2.1) gone.push([a, b]); } }));
+    bu.booms.push({x: hx, y: hy, t: 0}); bu.shake = 10; beep(90, .45, 'sawtooth', 40, .1); setTimeout(() => beep(60, .3, 'square', 30, .06), 60);
+  } else {
+    let col = s.c;
+    if (col === BU.RAIN) {  // l'arc-en-ciel prend la couleur voisine qui fait le plus grand groupe
+      const near = [...new Set(buNb(r, c).map(([a, b]) => bu.grid[a]?.[b]).filter(v => v >= 0 && v < 6))];
+      col = near.length ? near.map(v => [group(v).length, v]).sort((x, y) => y[0] - x[0])[0][1] : buPick();
+      bu.pops.push({x: hx, y: hy, c: col, t: 0, drops: []}); beep(1046, .12, 'triangle', 1568, .05);
+    }
+    const same = group(col); if (same.length >= 3) gone = same;
+  }
+  let fell = 0, comps = 0, pts = 0;
+  if (gone.length) {
+    gone.forEach(([a, b]) => buPop(a, b)); [fell, comps] = buDrop();
+    pts = gone.length * (s.c === BU.BOMB ? 15 : 10) + Math.round(fell * 20 * (1 + fell / 4)) * Math.max(1, comps);  // deux grappes qui tombent d'un coup : chute ×2
+    bu.score += pts; bus.popped += gone.length + fell;
+    if (s.c !== BU.BOMB) beep(880, .08, 'triangle', 1320, .07); if (fell) setTimeout(() => beep(660, .15, 'triangle', 220, .06), 80);
+    buSay(hx, hy - 6, '+' + pts, '#ffffff');
+    if (comps >= 2) { buSay(W / 2, 120, 'COMBO ×' + comps, '#ffd84a', true); bu.shake = Math.max(bu.shake, 6); [0, 90, 180].forEach((d, i) => setTimeout(() => beep(784 * 1.26 ** i, .1, 'square', 0, .05), d)); }
+    else if (fell >= 4) buSay(W / 2, 120, 'CHUTE ×' + fell, '#7ee07a', true);
   } else beep(260, .04, 'square', 0, .04);
   bu.shots++; if (bu.shots % 7 === 0) { bu.top += BU.ROWH; beep(160, .2, 'sawtooth', 100, .05); }  // le plafond descend
-  if (!buPresent().length) { bu.score += 500; for (let r = 0; r < 6; r++) for (let c = 0; c < buCols(r); c++) bu.grid[r][c] = Math.floor(Math.random() * Math.min(6, ++bu.colors > 6 ? 6 : bu.colors)); bu.top = 0; }
+  if (!buPresent().length) {  // plus aucune couleur : les pierres tombent en bonus, et un nouveau tableau arrive, avec une couleur et une pierre de plus
+    let st = 0; bu.grid.forEach((row, a) => row.forEach((v, b) => { if (v === BU.STONE) { const [x, y] = buXY(a, b, bu.top); bu.falling.push({x, y, vy: -1, vx: 0, c: v}); bu.grid[a][b] = -1; st++; } }));
+    bu.score += 500 + st * 50; bu.colors = Math.min(6, bu.colors + 1); bu.board++; bu.top = 0; buFill(bu.colors, Math.min(6, bu.board + 1));
+    buSay(W / 2, 100, 'TABLEAU ' + bu.board, '#ffd84a', true);
+  }
   if (bu.grid.some((row, a) => row.some((v, b) => v >= 0 && buXY(a, b, bu.top)[1] + BU.R > BU.DEAD))) { bu.mode = 'over'; bu.overAt = bu.tick; bus.games++; best('bulles', Math.round(bu.score)); saveGames(); buInfo(); beep(140, .5, 'sawtooth', 60, .08); }
-  if (!buPresent().includes(bu.cur)) bu.cur = buPick(); if (!buPresent().includes(bu.next)) bu.next = buPick();
+  if (bu.cur < 6 && !buPresent().includes(bu.cur)) bu.cur = buPick(); if (bu.next < 6 && !buPresent().includes(bu.next)) bu.next = buPick();
 }
 function buUpdate() {
   const s = bu.shot;
@@ -371,8 +425,14 @@ function buUpdate() {
     const hit = s.y < BU.Y0 + bu.top + BU.R || bu.grid.some((row, a) => row.some((v, b) => { if (v < 0) return false; const [x, y] = buXY(a, b, bu.top); return Math.hypot(x - s.x, y - s.y) < BU.D - 2; }));
     if (hit) { bu.shot = null; buSnap(s); break; }
   }
-  for (const f of bu.falling) { f.vy += .3; f.y += f.vy; } bu.falling = bu.falling.filter(f => f.y < H + 10);
-  for (const p of bu.pops) p.t++; bu.pops = bu.pops.filter(p => p.t < 10);
+  buAnim();
+}
+function buAnim() {  // ce qui bouge encore après la fin d'une partie : chutes, éclats, textes
+  for (const f of bu.falling) { f.vy += .3; f.y += f.vy; f.x += f.vx; } bu.falling = bu.falling.filter(f => f.y < H + 10);
+  for (const p of bu.pops) p.t++; bu.pops = bu.pops.filter(p => p.t < 20);
+  for (const b of bu.booms) b.t++; bu.booms = bu.booms.filter(b => b.t < 16);
+  for (const t of bu.texts) t.t++; bu.texts = bu.texts.filter(t => t.t < (t.big ? 70 : 40));
+  if (bu.shake) bu.shake--;
 }
 const BU_BG = cnv(W, H, b => {  // un aquarium de nuit : fond tramé, algues sur les bords, sable
   for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) px(b, y < H * .5 ? ((x + y) % 2 && y % 16 < 3 ? '#0e1a3a' : '#0a1430') : '#0a1430', x, y);
@@ -382,37 +442,77 @@ const BU_BG = cnv(W, H, b => {  // un aquarium de nuit : fond tramé, algues sur
   px(b, '#05010b', 0, 0, W, BU.Y0 - 2); px(b, '#2a1a4a', 0, BU.Y0 - 2, W, 2);
 });
 function buDraw() {
+  if (bu.mode === 'over') buAnim();  // après la fin, les bulles finissent de tomber
+  const sh = bu.shake ? Math.round((Math.random() - .5) * Math.min(4, bu.shake)) : 0;
+  g.save(); g.translate(sh, sh ? Math.round((Math.random() - .5) * 3) : 0);
   g.drawImage(BU_BG, 0, 0);
   if (bu.top) { px(g, '#3a2a5a', BU.X0, BU.Y0, BU.COLS * BU.D, bu.top); for (let x = BU.X0; x < BU.X0 + BU.COLS * BU.D; x += 6) px(g, '#5a4a7a', x, BU.Y0 + bu.top - 2, 3, 2); }
-  bu.grid.forEach((row, r) => row.forEach((v, c) => { if (v >= 0) { const [x, y] = buXY(r, c, bu.top); g.drawImage(BU_SPR[v], x - BU.R, y - BU.R); } }));
-  for (const f of bu.falling) g.drawImage(BU_SPR[f.c], f.x - BU.R, f.y - BU.R);
-  for (const p of bu.pops) { const k = p.t / 10, rr = Math.round(BU.R + k * 6); g.globalAlpha = 1 - k; for (let a = 0; a < 8; a++) px(g, BU_COL[p.c][1], p.x + Math.cos(a * .785) * rr, p.y + Math.sin(a * .785) * rr, 2, 2); g.globalAlpha = 1; }
+  bu.grid.forEach((row, r) => row.forEach((v, c) => { if (v >= 0) { const [x, y] = buXY(r, c, bu.top); g.drawImage(buImg(v, bu.tick), x - BU.R, y - BU.R); } }));
+  for (const f of bu.falling) g.drawImage(buImg(f.c, bu.tick), Math.round(f.x - BU.R), Math.round(f.y - BU.R));
+  // l'éclatement : la bulle gonfle un instant, puis se brise en anneau et en gouttes qui retombent
+  for (const p of bu.pops) {
+    if (p.t < 3) { const z = 14 + p.t * 2; g.drawImage(buImg(p.c, bu.tick), Math.round(p.x - z / 2), Math.round(p.y - z / 2), z, z); continue; }
+    const k = (p.t - 3) / 17, col = buLight(p.c);
+    if (p.t < 8) { const rr = BU.R + (p.t - 3) * 2; for (let a = 0; a < 12; a++) if (a % 3) px(g, p.t < 6 ? '#ffffff' : col, p.x + Math.cos(a * .5236) * rr, p.y + Math.sin(a * .5236) * rr, 1, 1); }
+    g.globalAlpha = 1 - k; const n = p.t - 3; for (const [vx, vy] of p.drops) { const s = n < 8 ? 2 : 1; px(g, col, p.x + vx * n * 1.4 - s / 2, p.y + vy * n * 1.4 + .09 * n * n - s / 2, s, s); } g.globalAlpha = 1;
+  }
+  // la bombe : un éclair rond qui grandit, jaune puis orange
+  for (const b of bu.booms) { const rr = 6 + b.t * 2.2; g.globalAlpha = 1 - b.t / 16; for (let a = 0; a < 28; a++) { const an = a / 28 * Math.PI * 2, j = (a * 7 + b.t) % 3; px(g, b.t < 5 ? '#ffffff' : j ? '#ffa030' : '#ffd84a', b.x + Math.cos(an) * (rr - j), b.y + Math.sin(an) * (rr - j), 2, 2); } if (b.t < 4) { g.globalAlpha = .5 - b.t / 8; px(g, '#fff0c0', b.x - rr, b.y - rr, rr * 2, rr * 2); } g.globalAlpha = 1; }
   // le canon et la ligne de visée en pointillés (avec un rebond)
   const cx = W / 2, cy = BU.DEAD + 16;
   if (bu.mode === 'play') { let x = cx, y = cy, vx = Math.cos(bu.ang), vy = Math.sin(bu.ang); for (let i = 0; i < 70; i++) { x += vx * 3; y += vy * 3; if (x < BU.X0 + BU.R || x > BU.X0 + BU.COLS * BU.D - BU.R) vx = -vx; if (y < BU.Y0 + bu.top) break; if (i % 3 === 0) px(g, '#c8d8ff', x, y, 1, 1); } }
   for (let k = 0; k < 14; k++) px(g, k < 3 ? '#05010b' : '#8a8aa8', cx + Math.cos(bu.ang) * k - 1, cy + Math.sin(bu.ang) * k - 1, 3, 3);
   px(g, '#05010b', cx - 10, cy - 2, 20, 12); px(g, '#5a5a78', cx - 9, cy - 1, 18, 10); px(g, '#8a8aa8', cx - 9, cy - 1, 18, 2);
-  if (bu.shot) g.drawImage(BU_SPR[bu.shot.c], bu.shot.x - BU.R, bu.shot.y - BU.R); else if (bu.mode === 'play') g.drawImage(BU_SPR[bu.cur], cx - BU.R, cy - BU.R - 1);
-  g.drawImage(BU_SPR[bu.next], 14, H - 30); pxFont(g, 'suivante', 32, H - 20, '#c8b8a0', 6);
+  if (bu.shot) g.drawImage(buImg(bu.shot.c, bu.tick), Math.round(bu.shot.x - BU.R), Math.round(bu.shot.y - BU.R)); else if (bu.mode === 'play') g.drawImage(buImg(bu.cur, bu.tick), cx - BU.R, cy - BU.R - 1);
+  g.drawImage(buImg(bu.next, bu.tick), 10, H - 28); pxFont(g, bu.next === BU.BOMB ? 'bombe !' : bu.next === BU.RAIN ? 'arc-en-ciel !' : 'suivante', 8, H - 30, bu.next >= 6 ? '#ffd84a' : '#c8b8a0', 6);  // le nom au-dessus de la bulle : il ne passe jamais sous le canon
+  // les points gagnés montent et s'effacent ; les combos s'affichent en grand au milieu
+  for (const t of bu.texts) { const k = t.t / (t.big ? 70 : 40); g.globalAlpha = k > .7 ? (1 - k) / .3 : 1; pxFont(g, t.txt, t.x, Math.round(t.y - t.t * (t.big ? .25 : .5)), t.col, t.big ? 14 : 6, 'center'); g.globalAlpha = 1; }
+  g.restore();
   pxFont(g, String(Math.round(bu.score)), 6, 12, '#ffffff', 8); pxFont(g, 'plafond dans ' + (7 - bu.shots % 7), W - 6, 12, '#a8b8e0', 6, 'right');
+  if (bu.mode === 'pause' && bu.user) gameText(g, W, [['PAUSE', '#ffd84a', 12], ['P ou Start : reprendre', '#ffffff']], 118);
   if (bu.mode === 'over' && bu.tick - bu.overAt > 30) gameText(g, W, [['C\'EST PLEIN !', '#ff4a5a', 12], [Math.round(bu.score) + ' points', '#ffffff'], ['Clic pour rejouer', '#ffd84a']], 110);
 }
-cv.onpointermove = e => { if (!bu) return; const [x, y] = cpos(e); bu.ang = Math.max(-Math.PI + .15, Math.min(-.15, Math.atan2(y - (BU.DEAD + 16), x - W / 2))); };
+const buAim = a => { bu.ang = Math.max(-Math.PI + .15, Math.min(-.15, a)); };
+cv.onpointermove = e => { if (!bu) return; const [x, y] = cpos(e); buAim(Math.atan2(y - (BU.DEAD + 16), x - W / 2)); };
 cv.onpointerdown = e => { e.preventDefault(); if (!bu) return; if (bu.mode === 'over') { if (bu.tick - bu.overAt > 30) buNew(); return; } cv.onpointermove(e); buFire(); };
 document.addEventListener('keydown', e => {
   if (!keyOk(e) || !bu) return;
-  if (e.key === 'ArrowLeft') { e.preventDefault(); bu.ang = Math.max(-Math.PI + .15, bu.ang - .06); } if (e.key === 'ArrowRight') { e.preventDefault(); bu.ang = Math.min(-.15, bu.ang + .06); }
+  if (e.key === 'ArrowLeft') { e.preventDefault(); buAim(bu.ang - .06); } if (e.key === 'ArrowRight') { e.preventDefault(); buAim(bu.ang + .06); }
   if (e.key === ' ' || e.key === 'ArrowUp') { e.preventDefault(); if (bu.mode === 'over') { if (bu.tick - bu.overAt > 30) buNew(); } else buFire(); }
   if (e.key.toLowerCase() === 'x' && bu.mode === 'play' && !bu.shot) { [bu.cur, bu.next] = [bu.next, bu.cur]; beep(700, .03); }
-  if (e.key.toLowerCase() === 'p' && bu.mode === 'play') bu.mode = 'pause'; else if (e.key.toLowerCase() === 'p' && bu.mode === 'pause') bu.mode = 'play';
+  if (e.key.toLowerCase() === 'p' && bu.mode === 'play') { bu.mode = 'pause'; bu.user = true; } else if (e.key.toLowerCase() === 'p' && bu.mode === 'pause') { bu.mode = 'play'; bu.user = false; }
 });
+{  // la manette : stick gauche ou croix pour viser (en continu), A pour tirer, X ou Y pour échanger, Start pour la pause ; les boutons envoient les touches du clavier
+  const KEY = {0: ' ', 2: 'x', 3: 'x', 9: 'p'}, held = new Set();
+  const loop = () => {
+    requestAnimationFrame(loop); if (!bu || !view.classList.contains('on') || !navigator.getGamepads) return;
+    const p = [...navigator.getGamepads()].find(Boolean); if (!p) return;
+    const ax = p.axes[0] || 0, turn = Math.abs(ax) > .2 ? ax : p.buttons[14]?.pressed ? -1 : p.buttons[15]?.pressed ? 1 : 0;
+    if (turn && bu.mode === 'play') buAim(bu.ang + turn * .035);
+    for (const [i, k] of Object.entries(KEY)) { const on = !!p.buttons[i]?.pressed; if (on && !held.has(i)) { held.add(i); document.dispatchEvent(new KeyboardEvent('keydown', {key: k, bubbles: true})); } else if (!on) held.delete(i); }
+  };
+  requestAnimationFrame(loop);
+}
 function buInfo() { showStats([['Meilleur score', games.best.bulles || 0], ['Parties', bus.games], ['Bulles éclatées', bus.popped]]); }
 $('gNew').onclick = () => { buNew(); $('gNew').blur(); };
-{  // vérification : trois bulles pareilles éclatent, et une bulle qui ne tient plus tombe
-  const keep = bu, kp = bus.popped; bu = null; buNew(); bu.grid.forEach(r => r.fill(-1)); bu.grid[0][0] = 1; bu.grid[0][1] = 1; bu.grid[1][1] = 2; bu.grid[2][1] = 3; bu.grid[0][5] = 0;
-  const [x, y] = buXY(0, 2, 0); buSnap({x, y, c: 1}); const popped = bu.grid[0][0] < 0 && bu.grid[0][2] < 0, fell = bu.grid[1][1] < 0 && bu.falling.length === 2 && bu.grid[0][5] === 0;
-  console.assert(popped && fell, 'bulles', {popped, fell}); bu = keep; bus.popped = kp;
-}
-ctx.onOpen(() => { if (!bu) buNew(); gameLoop(bu, 'bulles', buUpdate, buDraw); buInfo(); });
+$('gFs').onclick = () => { $('gFs').blur(); if (document.fullscreenElement) document.exitFullscreen(); else cv.parentElement.requestFullscreen?.().catch(() => {}); };
+const buCheck = () => {  // vérification : trois bulles pareilles éclatent et ce qui ne tient plus tombe ; deux grappes d'un coup font un combo ; l'arc-en-ciel, la bombe et la pierre
+  const keep = bu, kp = bus.popped, bad = [], empty = () => { bu = null; buNew(); bu.grid.forEach(r => r.fill(-1)); };
+  empty(); bu.grid[0][0] = 1; bu.grid[0][1] = 1; bu.grid[1][1] = 2; bu.grid[2][1] = 3; bu.grid[0][5] = 0;
+  let [x, y] = buXY(0, 2, 0); buSnap({x, y, c: 1}); if (!(bu.grid[0][0] < 0 && bu.grid[0][2] < 0 && bu.grid[1][1] < 0 && bu.falling.length === 2 && bu.grid[0][5] === 0)) bad.push('trois pareilles');
+  empty(); bu.grid[0][0] = 1; bu.grid[0][2] = 1; bu.grid[1][0] = 2; bu.grid[1][2] = 3; bu.grid[0][9] = 0;  // deux grappes séparées, pendues sous les bulles jaunes
+  [x, y] = buXY(0, 1, 0); buSnap({x, y, c: 1}); if (!bu.texts.some(t => t.txt === 'COMBO ×2')) bad.push('combo');
+  empty(); bu.grid[0][0] = 2; bu.grid[0][1] = 2; bu.grid[0][3] = 4; bu.grid[0][9] = 0;
+  [x, y] = buXY(0, 2, 0); buSnap({x, y, c: BU.RAIN}); if (bu.grid[0][0] >= 0 || bu.grid[0][3] !== 4) bad.push('arc-en-ciel');
+  empty(); bu.grid[0][4] = BU.STONE; bu.grid[0][5] = 0; bu.grid[0][6] = 1; bu.grid[0][10] = 3;
+  [x, y] = buXY(1, 5, 0); buSnap({x, y, c: BU.BOMB}); if (bu.grid[0][4] >= 0 || bu.grid[0][5] >= 0 || bu.grid[0][10] !== 3) bad.push('bombe');
+  empty(); bu.grid[0][0] = 1; bu.grid[0][1] = 1; bu.grid[1][0] = BU.STONE; bu.grid[0][9] = 0;
+  [x, y] = buXY(1, 1, 0); buSnap({x, y, c: 4}); if (bu.grid[1][0] !== BU.STONE) bad.push('la pierre ne casse pas');
+  [x, y] = buXY(0, 2, 0); buSnap({x, y, c: 1}); if (bu.grid[1][0] >= 0 || !bu.falling.some(f => f.c === BU.STONE)) bad.push('la pierre tombe');
+  bu = keep; bus.popped = kp; return bad.length ? bad.join(', ') : 'ok';
+};
+cv.__bu = {st: () => bu, check: buCheck, BU};  // pour l'auto-test
+console.assert(buCheck() === 'ok', 'bulles', buCheck());
+ctx.onOpen(() => { if (!bu) buNew(); if (bu.mode === 'pause' && !bu.user) bu.mode = 'play'; gameLoop(bu, 'bulles', buUpdate, buDraw); buInfo(); });
 
 }

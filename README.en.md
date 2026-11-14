@@ -11,6 +11,8 @@ A bubble shooter: aim, shoot towards the ceiling, and group the colours. Three m
 - **← / →**: aim with the keyboard; **Space** or **↑**: shoot.
 - **X**: swap the ready bubble with the next one (shown at the bottom left).
 - **P**: pause.
+- **Gamepad**: left stick or d-pad to aim, **A** to shoot, **X** or **Y** to swap, **Start** to pause.
+- **Full screen**: the button next to New game. The aquarium takes the whole height of the window, small or large.
 
 ## Rules
 
@@ -20,13 +22,25 @@ A bubble shooter: aim, shoot towards the ceiling, and group the colours. Three m
 - **Every 7 shots**, the ceiling comes down one row; the countdown is shown at the top right.
 - The game is lost when a bubble crosses the dotted line at the bottom: "It's full!".
 - Bubbles to shoot only take colours still on the board.
-- When the board is empty, a new 6-row ceiling arrives with one more colour (from 4 at the start up to 6), and the ceiling goes back to the top.
+- When no colour is left, the stones fall as a bonus and a new 6-row ceiling arrives with one more colour (from 4 at the start up to 6) and one more stone, and the ceiling goes back to the top.
+
+## Special bubbles
+
+- **Stone** (grey, cracked): it never breaks, even surrounded by matching bubbles. To get rid of it, make it fall by breaking what holds it.
+- **Bomb**: every 20 shots, it comes as the next bubble. Where it sticks, it blows up everything within two bubbles, stones included.
+- **Rainbow**: 10 shots after the bomb. It takes the colour of the neighbouring bubble that makes the biggest group.
+
+The next bubble announces it in yellow ("bomb!", "rainbow!"); you can keep it for later with **X**.
 
 ## Points
 
 - **10 points** per popped bubble.
 - Each falling bubble is worth **20 points**, and more when the cluster is big (20 × (1 + number of fallen bubbles ÷ 4)): 4 fallen bubbles are worth 160 points, 8 are worth 480.
-- **500 bonus points** for clearing the board.
+- When **several separate clusters fall at once**, it is a **combo**: the falling points are multiplied by the number of clusters ("COMBO ×2" shows up big).
+- **15 points** per bubble blown away by a bomb.
+- **500 bonus points** for clearing the board, and **50** per stone falling at that moment.
+
+Each popped bubble swells, breaks into a ring then into drops; the points won rise from where the shot landed.
 
 ## Statistics
 
