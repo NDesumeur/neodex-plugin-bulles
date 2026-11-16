@@ -1,9 +1,9 @@
 {
   "pluginId": "neodex.bulles",
   "repo": "NDesumeur/neodex-plugin-bulles",
-  "version": "1.1.0",
-  "sha256": "f50a6dfc10ffef468aa5309d37388fe20c154afc2d36f82150026b6e547a28e4",
-  "approvedAt": "2026-11-16T04:14:34.175Z",
+  "version": "1.1.1",
+  "sha256": "1ccc0b548541222ed565b21221adb2f388c21b1a8e0883f36122f564ea61ac8e",
+  "approvedAt": "2026-11-16T16:38:47.292Z",
   "neobase": ">=4.0.0",
-  "signature": "U0Ku/7RCAE8vfArZ7dvQYTCBPO3VnNVQ7SHQQkH5RGGSXT59ROaK3mTr6qGGVqcu8w+MPvqXzbTMw/7DwrziAg=="
+  "signature": "fChTrNvMhI+ZMj4cn1mRK8ICu2sEA+yBqDsCI3H+Ihj6IfCGaf813CThsir8n8tLgLOKmH9gl+z4ZIwJ57C8CA=="
 }
