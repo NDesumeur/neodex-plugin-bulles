@@ -66,5 +66,8 @@
  "Ug": "Ug",
  "arc-en-ciel !": "rainbow!",
  "bombe !": "bomb!",
- "plafond dans": "ceiling in"
+ "plafond dans": "ceiling in",
+ "TABLEAU": "BOARD",
+ "la pierre ne casse pas": "the stone does not break",
+ "la pierre tombe": "the stone falls"
 }
