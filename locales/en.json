@@ -45,7 +45,6 @@
  "KWWWWWWWWWWK": "KWWWWWWWWWWK",
  "Le pointillé montre la trajectoire, rebonds sur les bords compris.": "The dotted line shows the trajectory, including bounces on the edges.",
  "Meilleur score": "Best score",
- "Meilleur score, bulles éclatées.": "Highest score, bubbles burst.",
  "NOUVELLE PARTIE": "NEW GAME",
  "Nt": "Nt",
  "Oa": "Oa",
@@ -69,5 +68,6 @@
  "plafond dans": "ceiling in",
  "TABLEAU": "BOARD",
  "la pierre ne casse pas": "the stone does not break",
- "la pierre tombe": "the stone falls"
+ "la pierre tombe": "the stone falls",
+ "Rien n'est synchronisé : tes records restent sur cet appareil.": "Nothing is synced: your records stay on this device."
 }

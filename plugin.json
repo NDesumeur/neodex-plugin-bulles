@@ -1,7 +1,7 @@
 {
   "id": "neodex.bulles",
   "name": "Bulles",
-  "version": "1.1.1",
+  "version": "1.1.2",
   "author": "NDesumeur",
   "description": "Jeu de tir de bulles en pixel art : vise à la souris, au clavier ou à la manette (le pointillé montre les rebonds), tire, et regroupe au moins trois bulles de la même couleur pour les faire éclater en gouttes ; tout ce qui ne tient plus au plafond tombe, et plusieurs grappes d'un coup font un combo. Bombe, bulle arc-en-ciel et pierres qui ne cassent jamais ; le plafond descend tous les 7 tirs, X échange la bulle avec la suivante, chaque plateau vidé en amène un nouveau avec une couleur de plus. Plein écran, et l'aquarium s'adapte à la taille de la fenêtre.",
   "icon": "icon.png",
@@ -14,8 +14,8 @@
     "windows",
     "linux"
   ],
-  "syncMode": "progression",
-  "syncInfo": "Meilleur score, bulles éclatées.",
+  "syncMode": "aucune",
+  "syncInfo": "Rien n'est synchronisé : tes records restent sur cet appareil.",
   "mobile": false,
   "system": false,
   "dependencies": {},
