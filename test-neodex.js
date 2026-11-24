@@ -25,6 +25,13 @@ module.exports = async ({ pj, sleep }) => {
   // la bombe et l'arc-en-ciel annoncés dans la bulle suivante, une pierre au tableau, un combo à l'écran
   await B(`bu.grid.forEach(r => r.fill(-1)); for (let c = 0; c < 12; c++) bu.grid[0][c] = c % 4; for (let c = 0; c < 11; c++) bu.grid[1][c] = (c + 2) % 5; bu.grid[2][4] = BU.STONE; bu.grid[2][7] = BU.STONE; bu.grid[2][1] = 5; bu.cur = BU.BOMB; bu.next = BU.RAIN; bu.texts.push({x: 92, y: 120, txt: 'COMBO ×2', col: '#ffd84a', big: true, t: 5}); return 0;`);
   await sleep(250); await shot('2-speciales');
+  // l'aventure : le bouton du niveau 1, puis le niveau 12 (aimant, glace, poissons, coffre) montré, puis un niveau gagné
+  const adv = await pj(`(() => { const b = document.querySelectorAll('#buGrid button'); b[0].click(); return b.length + ':' + b[1].disabled; })()`); await sleep(200);
+  if (adv !== '12:true') throw new Error('grille de l’aventure : ' + adv);
+  if (await B('return bu.adv + ":" + bu.shotsMax;') !== '0:24') throw new Error('le niveau 1 ne démarre pas'); await shot('3-aventure-1');
+  await B('T.adv(11); return 0;'); await sleep(300); await shot('4-aventure-12');
+  await B('T.adv(2); const [x, y] = T.xy(2, 6, 0); T.snap({x, y, c: 3}); return 0;'); await sleep(1200); await shot('5-niveau-reussi');
+  if (await B('return bu.mode + bu.stars;') !== 'won3') throw new Error('le coffre tombé ne gagne pas le niveau');
   const errs = await pj(`window.__e.join(' | ')`); if (errs) throw new Error('erreur : ' + errs);
   // plein écran, et la zone de jeu qui tient dans la fenêtre
   await pj(`document.getElementById('gFs').click(), 0`); await sleep(700);
@@ -34,5 +41,5 @@ module.exports = async ({ pj, sleep }) => {
   const L = await pj(`(() => { const r = document.getElementById('gc').getBoundingClientRect(); let s = 0; for (let e = document.getElementById('gc').parentElement; e; e = e.parentElement) s += e.scrollTop; return { bottom: Math.round(r.bottom + s), h: Math.round(r.height), wh: innerHeight, ww: innerWidth, sw: document.documentElement.scrollWidth }; })()`);
   if (process.env.NEO_FIT_LOG) console.log('FIT', JSON.stringify(L));
   if (L.bottom > L.wh + 1 || L.sw > L.ww + 1 || L.h < 300) throw new Error('la zone de jeu dépasse la fenêtre ou reste petite : ' + JSON.stringify(L));
-  return 'règles ok · 3 tirs à la souris · visée et tir à la manette · plein écran · aquarium ' + L.h + ' px dans ' + L.ww + '×' + L.wh;
+  return 'règles ok · 3 tirs à la souris · visée et tir à la manette · aventure (12 niveaux, coffre) · plein écran · aquarium ' + L.h + ' px dans ' + L.ww + '×' + L.wh;
 };

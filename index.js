@@ -7,10 +7,12 @@ const HTML = `<div class="appWrap wide">
       <div class="sysCard"><b>RECORDS</b><div class="gStats" id="gStats"></div></div>
       <div class="row"><button class="btn main" id="gNew">NOUVELLE PARTIE</button><button class="btn" id="gFs">PLEIN ÉCRAN</button></div>
       <div class="hint">Le pointillé montre la trajectoire, rebonds sur les bords compris.</div><div class="hint">Tous les 7 tirs, le plafond descend d'une rangée. Fais tomber plusieurs grappes d'un coup pour un combo.</div>
-      <div class="hint">Bulles spéciales : la bombe fait sauter tout ce qui l'entoure, l'arc-en-ciel prend la couleur qui l'arrange, la pierre ne casse jamais (il faut la faire tomber).</div>
+      <div class="hint">Bulles spéciales : la bombe fait sauter tout ce qui l'entoure, l'arc-en-ciel prend la couleur qui l'arrange, la pierre ne casse jamais (il faut la faire tomber). La bulle de glace se dégèle quand une bulle se pose contre elle ; l'aimant attire les tirs qui passent près de lui.</div>
+      <div class="sysCard"><b>AVENTURE</b><div class="hint">12 niveaux faits main, avec un nombre de tirs : vider le tableau, libérer les poissons prisonniers (éclate ou fais tomber leur bulle) ou faire tomber le coffre.</div><div class="buGrid" id="buGrid"></div></div>
     </div></div>
 </div>`;
-const CSS = `.gMain{display:flex;gap:22px;align-items:flex-start;flex-wrap:wrap}
+const CSS = `.buGrid{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-top:8px}.buGrid .btn{padding:6px 2px;font-size:13px}
+.gMain{display:flex;gap:22px;align-items:flex-start;flex-wrap:wrap}
 .gameBox{display:grid;place-items:center;padding:10px;background:#05010b;flex:2;min-width:320px;position:relative}
 .gameBox canvas{width:100%;image-rendering:pixelated;cursor:var(--cp,pointer);touch-action:none}
 .gSide{display:flex;flex-direction:column;gap:14px;flex:1;min-width:250px;max-width:420px}
@@ -332,7 +334,25 @@ const keyOk = e => view.classList.contains('on') && !/INPUT|SELECT|TEXTAREA/.tes
 const showStats = rows => $('gStats').replaceChildren(...rows.flatMap(([a, b]) => [el('span', '', a), el('b', '', String(b))]));
 /* ---------- Bulles : viser et tirer des bulles ; trois de la même couleur éclatent, et celles qui ne tiennent plus à rien tombent ----------
    Valeurs d'une case : -1 vide, 0 à 5 les couleurs, 9 la pierre (ne casse jamais). Bulles à tirer en plus : 7 la bombe, 8 l'arc-en-ciel. */
-const BU = {R: 7, D: 14, COLS: 12, X0: 8, Y0: 18, ROWH: 12, SPEED: 4.2, DEAD: 214, BOMB: 7, RAIN: 8, STONE: 9};
+const BU = {R: 7, D: 14, COLS: 12, X0: 8, Y0: 18, ROWH: 12, SPEED: 4.2, DEAD: 214, BOMB: 7, RAIN: 8, STONE: 9, MAG: 10, CHEST: 11, FISH: 12, ICE: 20};
+const buC = v => v >= 0 && v < 6 ? v : v >= BU.FISH && v < BU.FISH + 6 ? v - BU.FISH : -1;  // la couleur qui compte pour les groupes (le poisson est dans une bulle de couleur)
+// le mode aventure : nom, objectif (vider, poissons, coffre), tirs, plafond tous les n tirs, le tableau (r y g b p o couleurs, MAJUSCULE : un poisson dedans,
+// S pierre, T coffre, M aimant, 0-5 glace de cette couleur ; les rangées impaires n'ont que 11 cases)
+const BU_ADV = [
+  ['Le récif', 'vider', 24, 9, ['rryybbrryybb', 'ryybbrryybb', 'yybbrryybbrr']],
+  ['Poissons rouges', 'poissons', 22, 9, ['bbbbrrrrbbbb', 'bbbRrrRbbbb', 'yyyyyyyyyyyy']],
+  ['Le coffre', 'coffre', 18, 9, ['rrrrrbbrrrrr', 'rrrrbbbrrrr', '.....T......']],
+  ['Les pierres', 'vider', 26, 9, ['ggppggppggpp', 'gSppgSpggSp', 'ppggppggppgg']],
+  ['La glace', 'vider', 26, 9, ['bbyybbyybbyy', 'b3yy1b3yy1b', 'yybbyybbyybb']],
+  ['L’aimant', 'poissons', 22, 9, ['ppppoooopppp', 'pppoMoooppp', 'oPoooooooPoo']],
+  ['Le trésor gardé', 'coffre', 22, 9, ['SSSSggggSSSS', '...gggggg..', '....gTTg....']],
+  ['Banc de poissons', 'poissons', 28, 8, ['rrggbbrrggbb', 'rGgbBrRgGbb', 'ggbbrrggbbrr', 'gbbrrggbbrr']],
+  ['Glace et pierres', 'vider', 30, 8, ['yyppyyppyypp', 'y4pSy4pSy4p', 'ppyyppyyppyy', 'pyyppyyppyy']],
+  ['Le grand coffre', 'coffre', 26, 8, ['MoorrbbrrooM', 'oorrbbbrroo', 'rrbbTTbbrr..', '.rbbbbbbr..']],
+  ['Profondeurs', 'vider', 34, 8, ['rrggbbppoorr', 'rggbbppoorr', 'ggbbppoorrgg', 'g2bb4poo0rg', 'bbppoorrggbb']],
+  ['Le trésor du roi', 'coffre', 34, 7, ['SpppMbbMpppS', 'Ppp3bbb3ppP', 'ooopbTbpooo.', 'ooBpbbbpBoo', '.ooppppppoo.']],
+];
+const BU_LET = {r: 0, y: 1, g: 2, b: 3, p: 4, o: 5};
 const BU_COL = [['#ff4a5a', '#ffb0b8', '#a02030'], ['#ffd84a', '#fff4b0', '#a07a10'], ['#5fdf6a', '#c8ffc8', '#2a8a3a'], ['#3f8aff', '#b0d0ff', '#1a4aa0'], ['#b07aff', '#e4d0ff', '#6a3ab0'], ['#ff9a3d', '#ffe0b0', '#a05a10']];
 // une bulle de verre : reflet blanc en haut à gauche, croissant clair dedans, lumière renvoyée en bas à droite, bord sombre du côté de l'ombre
 const BU_BALL = ['....kkkkkk....', '..kkmmmmmmkk..', '.kmmllllmmmmk.', '.kmlwwllmmmmk.', 'kmlwwlmmmmmmdk', 'kmllmmmmmmmmdk', 'kmlmmmmmmmmmdk', 'kmmmmmmmmmmmdk', 'kmmmmmmmmmmldk', 'kmmmmmmmmmlldk', '.kmmmmmmmlldk.', '.kdmmmmmmmddk.', '..kkddddddkk..', '....kkkkkk....'];
@@ -345,9 +365,15 @@ const BU_BOMB = spr(['.........y.o..', '........o.y...', '........f.....', '....
 // la pierre : un caillou à facettes, fendu
 const BU_STONE = spr(['....kkkkk.....', '..kk44433kk...', '.k4433333322k.', 'k443333c33322k', 'k43333c333322k', 'k4333c3333222k', 'k33333c332222k', 'k3333333c2222k', 'k333333332221k', 'k23333332c221k', '.k2233322221k.', '.k1222222211k.', '..kk111111kk..', '....kkkkkk....'],
   {k: '#05010b', 1: '#4a4640', 2: '#6a645a', 3: '#8e877a', 4: '#b8b0a0', c: '#2a2622'});
-const buImg = (v, t = 0) => v < 6 ? BU_SPR[v] : v === BU.BOMB ? BU_BOMB : v === BU.RAIN ? BU_RAIN[(t >> 3) % 6] : BU_STONE;
-const buLight = v => v < 6 ? BU_COL[v][1] : v === BU.STONE ? '#b8b0a0' : '#ffd84a';  // la couleur des gouttes quand elle éclate
-const bus = gstore('bulles', {games: 0, popped: 0});
+// les nouvelles bulles dessinées une fois : le poisson dans sa bulle, le coffre, l'aimant, la glace
+const BU_FISHI = spr(['..kk....', '.kook.kk', 'kowoookk', 'koooookk', '.kook.kk', '..kk....'], {k: '#05010b', o: '#ff9a3d', w: '#ffffff'});
+const BU_FISHS = BU_SPR.map(s => cnv(14, 14, b => { b.drawImage(s, 0, 0); b.globalAlpha = .55; px(b, '#ffffff', 3, 3, 8, 8); b.globalAlpha = 1; b.drawImage(BU_FISHI, 3, 4); }));
+const BU_CHESTI = cnv(14, 14, b => { b.drawImage(spr(BU_BALL, {k: '#05010b', m: '#7ab8d8', l: '#d0f0ff', d: '#3a6a8a', w: '#ffffff'}), 0, 0); px(b, '#05010b', 2, 4, 10, 8); px(b, '#a0602a', 3, 5, 8, 6); px(b, '#c8803a', 3, 5, 8, 2); px(b, '#ffd84a', 3, 7, 8, 1); px(b, '#ffd84a', 6, 7, 2, 3); px(b, '#05010b', 7, 8, 1, 1); });
+const BU_MAGI = cnv(14, 14, b => { b.drawImage(spr(BU_BALL, {k: '#05010b', m: '#8a8aa8', l: '#d0d0e8', d: '#4a4a6a', w: '#ffffff'}), 0, 0); px(b, '#05010b', 3, 3, 8, 8); px(b, '#e03a3a', 4, 4, 2, 5); px(b, '#e03a3a', 8, 4, 2, 5); px(b, '#e03a3a', 4, 8, 6, 2); px(b, '#e8e8f0', 4, 3, 2, 2); px(b, '#e8e8f0', 8, 3, 2, 2); px(b, '#05010b', 6, 4, 2, 4); });
+const BU_ICES = BU_SPR.map(s => cnv(14, 14, b => { b.drawImage(s, 0, 0); b.globalAlpha = .6; px(b, '#e8f8ff', 2, 2, 10, 10); b.globalAlpha = 1; px(b, '#ffffff', 4, 3, 1, 4); px(b, '#ffffff', 5, 6, 3, 1); px(b, '#ffffff', 8, 7, 1, 3); px(b, '#a8d8f0', 3, 9, 3, 1); }));
+const buImg = (v, t = 0) => v < 6 ? BU_SPR[v] : v === BU.BOMB ? BU_BOMB : v === BU.RAIN ? BU_RAIN[(t >> 3) % 6] : v === BU.MAG ? BU_MAGI : v === BU.CHEST ? BU_CHESTI : v >= BU.ICE ? BU_ICES[v - BU.ICE] : v >= BU.FISH ? BU_FISHS[v - BU.FISH] : BU_STONE;
+const buLight = v => v < 6 ? BU_COL[v][1] : buC(v) >= 0 ? BU_COL[buC(v)][1] : v >= BU.ICE ? '#e8f8ff' : v === BU.STONE ? '#b8b0a0' : '#ffd84a';  // la couleur des gouttes quand elle éclate
+const bus = gstore('bulles', {games: 0, popped: 0}); bus.adv ??= {}; bus.fish ??= 0; bus.chests ??= 0;
 const buXY = (r, c, top) => [BU.X0 + c * BU.D + (r % 2) * BU.R + BU.R, BU.Y0 + top + r * BU.ROWH + BU.R];
 const buNb = (r, c) => { const o = r % 2; return [[r, c - 1], [r, c + 1], [r - 1, c - 1 + o], [r - 1, c + o], [r + 1, c - 1 + o], [r + 1, c + o]]; };
 const buCols = r => BU.COLS - (r % 2);
@@ -356,12 +382,22 @@ function buFill(colors, stones) {  // six rangées de bulles, et quelques pierre
   for (let r = 0; r < 6; r++) for (let c = 0; c < buCols(r); c++) bu.grid[r][c] = Math.floor(Math.random() * colors);
   for (let k = 0; k < stones; k++) { const r = 2 + Math.floor(Math.random() * 4); bu.grid[r][Math.floor(Math.random() * buCols(r))] = BU.STONE; }
 }
-function buNew() {
+function buNew(lv = -1) {
   const grid = []; for (let r = 0; r < 18; r++) grid.push(Array(BU.COLS).fill(-1));
-  bu = Object.assign(bu || {tick: 0, raf: 0}, {mode: 'play', user: false, grid, top: 0, shots: 0, fired: 0, board: 1, ang: -Math.PI / 2, cur: Math.floor(Math.random() * 4), next: Math.floor(Math.random() * 4), shot: null, falling: [], pops: [], booms: [], texts: [], shake: 0, score: 0, overAt: 0, colors: 4});
-  buFill(4, 2); buInfo();
+  bu = Object.assign(bu || {tick: 0, raf: 0}, {adv: lv, freed: 0, fishes: [], chestsDown: 0, why: '', stars: 0, mode: 'play', user: false, grid, top: 0, shots: 0, fired: 0, board: 1, ang: -Math.PI / 2, cur: Math.floor(Math.random() * 4), next: Math.floor(Math.random() * 4), shot: null, falling: [], pops: [], booms: [], texts: [], shake: 0, score: 0, overAt: 0, colors: 4});
+  if (lv < 0) buFill(4, 2);
+  else {  // un niveau de l'aventure : le tableau tel qu'il est dessiné
+    const L = BU_ADV[lv]; L[4].forEach((row, r) => [...row].slice(0, buCols(r)).forEach((ch, c) => {
+      bu.grid[r][c] = ch === '.' ? -1 : ch in BU_LET ? BU_LET[ch] : ch.toLowerCase() in BU_LET ? BU.FISH + BU_LET[ch.toLowerCase()] : ch === 'S' ? BU.STONE : ch === 'T' ? BU.CHEST : ch === 'M' ? BU.MAG : BU.ICE + +ch; }));
+    bu.shotsMax = L[2]; bu.dropN = L[3]; bu.fishN = buCount(v => v >= BU.FISH && v < BU.ICE); bu.chestN = buCount(v => v === BU.CHEST); bu.cur = buPick(); bu.next = buPick();
+  }
+  buInfo(); buGrid();
 }
-function buPresent() { const s = new Set(); bu.grid.forEach(r => r.forEach(v => { if (v >= 0 && v < 6) s.add(v); })); return [...s]; }  // les couleurs encore là (pas les pierres)
+const buCount = f => bu.grid.flat().filter(v => v >= 0 && f(v)).length;
+function buWin() {  // l'objectif du niveau est-il atteint ?
+  const L = BU_ADV[bu.adv]; return L[1] === 'vider' ? !buPresent().length : L[1] === 'poissons' ? !buCount(v => v >= BU.FISH && v < BU.ICE) : !buCount(v => v === BU.CHEST);
+}
+function buPresent() { const s = new Set(); bu.grid.forEach(r => r.forEach(v => { const c = v >= BU.ICE ? v - BU.ICE : buC(v); if (c >= 0) s.add(c); })); return [...s]; }  // les couleurs encore là (pas les pierres)
 function buPick() { const p = buPresent(); return p.length ? p[Math.floor(Math.random() * p.length)] : Math.floor(Math.random() * bu.colors); }
 function buFire() {
   if (bu.mode !== 'play' || bu.shot) return; const [x, y] = [W / 2, BU.DEAD + 16];
@@ -369,14 +405,18 @@ function buFire() {
   bu.next = bu.fired % 10 === 0 ? (bu.fired % 20 ? BU.BOMB : BU.RAIN) : buPick();  // tous les 10 tirs, une bulle spéciale : bombe, puis arc-en-ciel
   beep(520, .05, 'square', 780, .05);
 }
-function buPop(a, b) { const [x, y] = buXY(a, b, bu.top), v = bu.grid[a][b]; bu.pops.push({x, y, c: v, t: 0, drops: Array.from({length: 7}, (_, i) => { const an = i / 7 * Math.PI * 2 + Math.random() * .5, sp = 1 + Math.random(); return [Math.cos(an) * sp, Math.sin(an) * sp - .6]; })}); bu.grid[a][b] = -1; }
+function buFree(v, x, y) {  // un poisson libéré nage vers la surface ; un coffre tombé brille
+  if (v >= BU.FISH && v < BU.ICE) { bu.freed++; bus.fish++; bu.fishes.push({x, y, t: 0, d: Math.random() < .5 ? -1 : 1}); beep(1318, .08, 'sine', 1760, .05); }
+  if (v === BU.CHEST) { bu.chestsDown++; bus.chests++; bu.score += 300; buSay(x, y - 8, '+300', '#ffd84a'); [784, 988, 1318].forEach((f, i) => setTimeout(() => beep(f, .1, 'triangle', 0, .06), i * 80)); }
+}
+function buPop(a, b) { const [x, y] = buXY(a, b, bu.top), v = bu.grid[a][b]; buFree(v, x, y); bu.pops.push({x, y, c: v, t: 0, drops: Array.from({length: 7}, (_, i) => { const an = i / 7 * Math.PI * 2 + Math.random() * .5, sp = 1 + Math.random(); return [Math.cos(an) * sp, Math.sin(an) * sp - .6]; })}); bu.grid[a][b] = -1; }
 function buDrop() {  // ce qui ne tient plus au plafond tombe ; renvoie le nombre de bulles et de grappes séparées
   const held = new Set(), q = []; for (let b = 0; b < buCols(0); b++) if (bu.grid[0][b] >= 0) { held.add('0,' + b); q.push([0, b]); }
   while (q.length) { const [a, b] = q.pop(); for (const [x, y] of buNb(a, b)) if (bu.grid[x]?.[y] >= 0 && !held.has(x + ',' + y)) { held.add(x + ',' + y); q.push([x, y]); } }
   const loose = new Map(); bu.grid.forEach((row, a) => row.forEach((v, b) => { if (v >= 0 && !held.has(a + ',' + b)) loose.set(a + ',' + b, [a, b]); }));
   let comps = 0; const seen = new Set();
   for (const [k, cell] of loose) { if (seen.has(k)) continue; comps++; seen.add(k); const st = [cell]; while (st.length) for (const [x, y] of buNb(...st.pop())) { const kk = x + ',' + y; if (loose.has(kk) && !seen.has(kk)) { seen.add(kk); st.push([x, y]); } } }
-  for (const [a, b] of loose.values()) { const [x, y] = buXY(a, b, bu.top); bu.falling.push({x, y, vy: -1 - Math.random(), vx: (Math.random() - .5) * .8, c: bu.grid[a][b]}); bu.grid[a][b] = -1; }
+  for (const [a, b] of loose.values()) { const [x, y] = buXY(a, b, bu.top); buFree(bu.grid[a][b], x, y); bu.falling.push({x, y, vy: -1 - Math.random(), vx: (Math.random() - .5) * .8, c: bu.grid[a][b]}); bu.grid[a][b] = -1; }
   return [loose.size, comps];
 }
 const buSay = (x, y, txt, col, big = false) => bu.texts.push({x, y, txt, col, big, t: 0});
@@ -384,15 +424,16 @@ function buSnap(s) {  // la bulle se range dans la case libre la plus proche, pu
   let best = null, bd = 1e9;
   for (let r = 0; r < bu.grid.length; r++) for (let c = 0; c < buCols(r); c++) if (bu.grid[r][c] < 0) { const [x, y] = buXY(r, c, bu.top), d = Math.hypot(x - s.x, y - s.y); if (d < bd && (r === 0 || buNb(r, c).some(([a, b]) => bu.grid[a]?.[b] >= 0))) { bd = d; best = [r, c]; } }
   if (!best) return; const [r, c] = best, [hx, hy] = buXY(r, c, bu.top);
-  const group = col => { bu.grid[r][c] = col; const same = [best], seen = new Set([r + ',' + c]); for (let i = 0; i < same.length; i++) for (const [a, b] of buNb(...same[i])) if (bu.grid[a]?.[b] === col && !seen.has(a + ',' + b)) { seen.add(a + ',' + b); same.push([a, b]); } return same; };
+  for (const [a, b] of buNb(r, c)) { const v = bu.grid[a]?.[b]; if (v >= BU.ICE) { bu.grid[a][b] = v - BU.ICE; const [x, y] = buXY(a, b, bu.top); bu.pops.push({x, y, c: v, t: 3, drops: Array.from({length: 5}, (_, i) => [Math.cos(i * 1.3), Math.sin(i * 1.3) - .5])}); beep(2200, .05, 'triangle', 1400, .04); } }  // la glace se dégèle au contact
+  const group = col => { bu.grid[r][c] = col; const same = [best], seen = new Set([r + ',' + c]); for (let i = 0; i < same.length; i++) for (const [a, b] of buNb(...same[i])) if (bu.grid[a]?.[b] >= 0 && buC(bu.grid[a][b]) === col && !seen.has(a + ',' + b)) { seen.add(a + ',' + b); same.push([a, b]); } return same; };
   let gone = [];
   if (s.c === BU.BOMB) {  // la bombe : tout ce qui est à deux bulles autour saute, pierres comprises
-    bu.grid[r][c] = BU.BOMB; bu.grid.forEach((row, a) => row.forEach((v, b) => { if (v >= 0) { const [x, y] = buXY(a, b, bu.top); if (Math.hypot(x - hx, y - hy) < BU.D * 2.1) gone.push([a, b]); } }));
+    bu.grid[r][c] = BU.BOMB; bu.grid.forEach((row, a) => row.forEach((v, b) => { if (v >= 0 && v !== BU.CHEST) { const [x, y] = buXY(a, b, bu.top); if (Math.hypot(x - hx, y - hy) < BU.D * 2.1) gone.push([a, b]); } }));
     bu.booms.push({x: hx, y: hy, t: 0}); bu.shake = 10; beep(90, .45, 'sawtooth', 40, .1); setTimeout(() => beep(60, .3, 'square', 30, .06), 60);
   } else {
     let col = s.c;
     if (col === BU.RAIN) {  // l'arc-en-ciel prend la couleur voisine qui fait le plus grand groupe
-      const near = [...new Set(buNb(r, c).map(([a, b]) => bu.grid[a]?.[b]).filter(v => v >= 0 && v < 6))];
+      const near = [...new Set(buNb(r, c).map(([a, b]) => buC(bu.grid[a]?.[b] ?? -1)).filter(v => v >= 0))];
       col = near.length ? near.map(v => [group(v).length, v]).sort((x, y) => y[0] - x[0])[0][1] : buPick();
       bu.pops.push({x: hx, y: hy, c: col, t: 0, drops: []}); beep(1046, .12, 'triangle', 1568, .05);
     }
@@ -408,18 +449,25 @@ function buSnap(s) {  // la bulle se range dans la case libre la plus proche, pu
     if (comps >= 2) { buSay(W / 2, 120, 'COMBO ×' + comps, '#ffd84a', true); bu.shake = Math.max(bu.shake, 6); [0, 90, 180].forEach((d, i) => setTimeout(() => beep(784 * 1.26 ** i, .1, 'square', 0, .05), d)); }
     else if (fell >= 4) buSay(W / 2, 120, 'CHUTE ×' + fell, '#7ee07a', true);
   } else beep(260, .04, 'square', 0, .04);
-  bu.shots++; if (bu.shots % 7 === 0) { bu.top += BU.ROWH; beep(160, .2, 'sawtooth', 100, .05); }  // le plafond descend
-  if (!buPresent().length) {  // plus aucune couleur : les pierres tombent en bonus, et un nouveau tableau arrive, avec une couleur et une pierre de plus
+  bu.shots++; if (bu.shots % (bu.adv >= 0 ? bu.dropN : 7) === 0) { bu.top += BU.ROWH; beep(160, .2, 'sawtooth', 100, .05); }  // le plafond descend
+  if (bu.adv >= 0) {  // l'aventure : l'objectif, ou plus de tirs
+    if (buWin()) { const left = bu.shotsMax - bu.shots, k = left / bu.shotsMax; bu.stars = k >= .4 ? 3 : k >= .15 ? 2 : 1; bu.score += left * 50; bu.mode = 'won'; bu.overAt = bu.tick;
+      if (bu.stars > (bus.adv[bu.adv] || 0)) bus.adv = {...bus.adv, [bu.adv]: bu.stars}; saveGames(); buInfo(); buGrid(); [523, 659, 784, 1046, 1318].forEach((f, i) => setTimeout(() => beep(f, .14, 'triangle'), i * 100)); return; }
+    if (bu.shots >= bu.shotsMax) { bu.mode = 'over'; bu.overAt = bu.tick; bu.why = 'Plus de bulles'; saveGames(); buInfo(); beep(140, .5, 'sawtooth', 60, .08); return; }
+  }
+  else if (!buPresent().length) {  // plus aucune couleur : les pierres tombent en bonus, et un nouveau tableau arrive, avec une couleur et une pierre de plus
     let st = 0; bu.grid.forEach((row, a) => row.forEach((v, b) => { if (v === BU.STONE) { const [x, y] = buXY(a, b, bu.top); bu.falling.push({x, y, vy: -1, vx: 0, c: v}); bu.grid[a][b] = -1; st++; } }));
     bu.score += 500 + st * 50; bu.colors = Math.min(6, bu.colors + 1); bu.board++; bu.top = 0; buFill(bu.colors, Math.min(6, bu.board + 1));
     buSay(W / 2, 100, 'TABLEAU ' + bu.board, '#ffd84a', true);
   }
-  if (bu.grid.some((row, a) => row.some((v, b) => v >= 0 && buXY(a, b, bu.top)[1] + BU.R > BU.DEAD))) { bu.mode = 'over'; bu.overAt = bu.tick; bus.games++; best('bulles', Math.round(bu.score)); saveGames(); buInfo(); beep(140, .5, 'sawtooth', 60, .08); }
+  if (bu.grid.some((row, a) => row.some((v, b) => v >= 0 && buXY(a, b, bu.top)[1] + BU.R > BU.DEAD))) { bu.mode = 'over'; bu.overAt = bu.tick; bu.why = 'C\'est plein !'; bus.games++; best('bulles', Math.round(bu.score)); saveGames(); buInfo(); beep(140, .5, 'sawtooth', 60, .08); }
   if (bu.cur < 6 && !buPresent().includes(bu.cur)) bu.cur = buPick(); if (bu.next < 6 && !buPresent().includes(bu.next)) bu.next = buPick();
 }
 function buUpdate() {
   const s = bu.shot;
   if (s) for (let k = 0; k < 3; k++) {
+    bu.grid.forEach((row, a) => row.forEach((v, b) => { if (v !== BU.MAG) return; const [x, y] = buXY(a, b, bu.top), d = Math.hypot(x - s.x, y - s.y); if (d < 72 && d > 1) { const f = .3 * (1 - d / 72); s.vx += (x - s.x) / d * f; s.vy += (y - s.y) / d * f; } }));  // l'aimant tire la bulle vers lui
+    { const sp = Math.hypot(s.vx, s.vy); s.vx *= BU.SPEED / sp; s.vy *= BU.SPEED / sp; }
     s.x += s.vx / 3 * 1.6; s.y += s.vy / 3 * 1.6;
     if (s.x < BU.X0 + BU.R) { s.x = BU.X0 + BU.R; s.vx = Math.abs(s.vx); beep(400, .02, 'square', 0, .03); } if (s.x > BU.X0 + BU.COLS * BU.D - BU.R) { s.x = BU.X0 + BU.COLS * BU.D - BU.R; s.vx = -Math.abs(s.vx); beep(400, .02, 'square', 0, .03); }
     const hit = s.y < BU.Y0 + bu.top + BU.R || bu.grid.some((row, a) => row.some((v, b) => { if (v < 0) return false; const [x, y] = buXY(a, b, bu.top); return Math.hypot(x - s.x, y - s.y) < BU.D - 2; }));
@@ -432,6 +480,7 @@ function buAnim() {  // ce qui bouge encore après la fin d'une partie : chutes,
   for (const p of bu.pops) p.t++; bu.pops = bu.pops.filter(p => p.t < 20);
   for (const b of bu.booms) b.t++; bu.booms = bu.booms.filter(b => b.t < 16);
   for (const t of bu.texts) t.t++; bu.texts = bu.texts.filter(t => t.t < (t.big ? 70 : 40));
+  for (const f of bu.fishes) { f.t++; f.y -= 1.1; f.x += Math.sin(f.t / 6) * .8 * f.d; } bu.fishes = bu.fishes.filter(f => f.y > -10);
   if (bu.shake) bu.shake--;
 }
 const BU_BG = cnv(W, H, b => {  // un aquarium de nuit : fond tramé, algues sur les bords, sable
@@ -442,13 +491,15 @@ const BU_BG = cnv(W, H, b => {  // un aquarium de nuit : fond tramé, algues sur
   px(b, '#05010b', 0, 0, W, BU.Y0 - 2); px(b, '#2a1a4a', 0, BU.Y0 - 2, W, 2);
 });
 function buDraw() {
-  if (bu.mode === 'over') buAnim();  // après la fin, les bulles finissent de tomber
+  if (bu.mode === 'over' || bu.mode === 'won') buAnim();  // après la fin, les bulles finissent de tomber
   const sh = bu.shake ? Math.round((Math.random() - .5) * Math.min(4, bu.shake)) : 0;
   g.save(); g.translate(sh, sh ? Math.round((Math.random() - .5) * 3) : 0);
   g.drawImage(BU_BG, 0, 0);
   if (bu.top) { px(g, '#3a2a5a', BU.X0, BU.Y0, BU.COLS * BU.D, bu.top); for (let x = BU.X0; x < BU.X0 + BU.COLS * BU.D; x += 6) px(g, '#5a4a7a', x, BU.Y0 + bu.top - 2, 3, 2); }
   bu.grid.forEach((row, r) => row.forEach((v, c) => { if (v >= 0) { const [x, y] = buXY(r, c, bu.top); g.drawImage(buImg(v, bu.tick), x - BU.R, y - BU.R); } }));
   for (const f of bu.falling) g.drawImage(buImg(f.c, bu.tick), Math.round(f.x - BU.R), Math.round(f.y - BU.R));
+  for (const f of bu.fishes) { g.save(); g.translate(Math.round(f.x), Math.round(f.y)); if (f.d < 0) g.scale(-1, 1); g.drawImage(BU_FISHI, -4, -3); g.restore(); if (f.t % 8 === 0) px(g, '#c8e8ff', f.x, f.y - 5, 1, 1); }
+  bu.grid.forEach((row, r) => row.forEach((v, c) => { if (v === BU.MAG) { const [x, y] = buXY(r, c, bu.top), rr = 9 + (bu.tick >> 1) % 14; g.globalAlpha = .5 - rr / 46; for (let a = 0; a < 16; a++) px(g, '#ff8a8a', x + Math.cos(a * .39) * rr, y + Math.sin(a * .39) * rr, 1, 1); g.globalAlpha = 1; } }));
   // l'éclatement : la bulle gonfle un instant, puis se brise en anneau et en gouttes qui retombent
   for (const p of bu.pops) {
     if (p.t < 3) { const z = 14 + p.t * 2; g.drawImage(buImg(p.c, bu.tick), Math.round(p.x - z / 2), Math.round(p.y - z / 2), z, z); continue; }
@@ -468,17 +519,22 @@ function buDraw() {
   // les points gagnés montent et s'effacent ; les combos s'affichent en grand au milieu
   for (const t of bu.texts) { const k = t.t / (t.big ? 70 : 40); g.globalAlpha = k > .7 ? (1 - k) / .3 : 1; pxFont(g, t.txt, t.x, Math.round(t.y - t.t * (t.big ? .25 : .5)), t.col, t.big ? 14 : 6, 'center'); g.globalAlpha = 1; }
   g.restore();
-  pxFont(g, String(Math.round(bu.score)), 6, 12, '#ffffff', 8); pxFont(g, 'plafond dans ' + (7 - bu.shots % 7), W - 6, 12, '#a8b8e0', 6, 'right');
+  if (bu.adv >= 0) { const L = BU_ADV[bu.adv], obj = L[1] === 'vider' ? 'vider' : L[1] === 'poissons' ? 'poissons ' + bu.freed + '/' + bu.fishN : 'coffre ' + bu.chestsDown + '/' + bu.chestN;
+    pxFont(g, (bu.adv + 1) + '. ' + obj, 6, 12, '#ffd84a', 6); pxFont(g, 'tirs ' + Math.max(0, bu.shotsMax - bu.shots), W - 6, 12, bu.shotsMax - bu.shots <= 5 ? '#ff8a6a' : '#a8b8e0', 6, 'right'); }
+  else { pxFont(g, String(Math.round(bu.score)), 6, 12, '#ffffff', 8); pxFont(g, 'plafond dans ' + (7 - bu.shots % 7), W - 6, 12, '#a8b8e0', 6, 'right'); }
   if (bu.mode === 'pause' && bu.user) gameText(g, W, [['PAUSE', '#ffd84a', 12], ['P ou Start : reprendre', '#ffffff']], 118);
-  if (bu.mode === 'over' && bu.tick - bu.overAt > 30) gameText(g, W, [['C\'EST PLEIN !', '#ff4a5a', 12], [Math.round(bu.score) + ' points', '#ffffff'], ['Clic pour rejouer', '#ffd84a']], 110);
+  if (bu.mode === 'over' && bu.tick - bu.overAt > 30) gameText(g, W, [[bu.adv >= 0 ? (bu.why || 'RATÉ').toUpperCase() : 'C\'EST PLEIN !', '#ff4a5a', 12], [bu.adv >= 0 ? BU_ADV[bu.adv][0] : Math.round(bu.score) + ' points', '#ffffff'], ['Clic pour rejouer', '#ffd84a']], 110);
+  if (bu.mode === 'won' && bu.tick - bu.overAt > 30) gameText(g, W, [['NIVEAU RÉUSSI !', '#7ee07a', 12], ['*'.repeat(bu.stars) + ' · ' + Math.round(bu.score) + ' points', '#ffd84a'], [bu.adv + 1 < BU_ADV.length ? 'Clic : niveau suivant' : 'Aventure finie !', '#ffffff']], 110);
+  if (bu.adv >= 0 && bu.mode === 'play' && bu.shots === 0 && !bu.shot) pxFont(g, BU_ADV[bu.adv][0], W / 2, 150, '#ffffff', 8, 'center');
 }
 const buAim = a => { bu.ang = Math.max(-Math.PI + .15, Math.min(-.15, a)); };
 cv.onpointermove = e => { if (!bu) return; const [x, y] = cpos(e); buAim(Math.atan2(y - (BU.DEAD + 16), x - W / 2)); };
-cv.onpointerdown = e => { e.preventDefault(); if (!bu) return; if (bu.mode === 'over') { if (bu.tick - bu.overAt > 30) buNew(); return; } cv.onpointermove(e); buFire(); };
+const buAgain = () => { if (bu.tick - bu.overAt <= 30) return; if (bu.mode === 'won') buNew(bu.adv + 1 < BU_ADV.length ? bu.adv + 1 : -1); else buNew(bu.adv); };
+cv.onpointerdown = e => { e.preventDefault(); if (!bu) return; if (bu.mode === 'over' || bu.mode === 'won') { buAgain(); return; } cv.onpointermove(e); buFire(); };
 document.addEventListener('keydown', e => {
   if (!keyOk(e) || !bu) return;
   if (e.key === 'ArrowLeft') { e.preventDefault(); buAim(bu.ang - .06); } if (e.key === 'ArrowRight') { e.preventDefault(); buAim(bu.ang + .06); }
-  if (e.key === ' ' || e.key === 'ArrowUp') { e.preventDefault(); if (bu.mode === 'over') { if (bu.tick - bu.overAt > 30) buNew(); } else buFire(); }
+  if (e.key === ' ' || e.key === 'ArrowUp') { e.preventDefault(); if (bu.mode === 'over' || bu.mode === 'won') buAgain(); else buFire(); }
   if (e.key.toLowerCase() === 'x' && bu.mode === 'play' && !bu.shot) { [bu.cur, bu.next] = [bu.next, bu.cur]; beep(700, .03); }
   if (e.key.toLowerCase() === 'p' && bu.mode === 'play') { bu.mode = 'pause'; bu.user = true; } else if (e.key.toLowerCase() === 'p' && bu.mode === 'pause') { bu.mode = 'play'; bu.user = false; }
 });
@@ -493,7 +549,10 @@ document.addEventListener('keydown', e => {
   };
   requestAnimationFrame(loop);
 }
-function buInfo() { showStats([['Meilleur score', games.best.bulles || 0], ['Parties', bus.games], ['Bulles éclatées', bus.popped]]); }
+function buInfo() { showStats([['Meilleur score', games.best.bulles || 0], ['Parties', bus.games], ['Bulles éclatées', bus.popped], ['Aventure', Object.keys(bus.adv).length + ' / ' + BU_ADV.length + ' · ' + Object.values(bus.adv).reduce((a, b) => a + b, 0) + ' étoiles'], ['Poissons libérés', bus.fish], ['Coffres', bus.chests]]); }
+function buGrid() {  // les niveaux de l'aventure : chacun s'ouvre quand le précédent est réussi
+  $('buGrid').replaceChildren(...BU_ADV.map((L, i) => { const s = bus.adv[i] || 0, b = el('button', 'btn' + (bu?.adv === i ? ' main' : ''), (i + 1) + (s ? ' ' + '*'.repeat(s) : '')); b.title = L[0]; b.disabled = i > 0 && !bus.adv[i - 1]; b.onclick = () => { buNew(i); b.blur(); }; return b; }));
+}
 $('gNew').onclick = () => { buNew(); $('gNew').blur(); };
 $('gFs').onclick = () => { $('gFs').blur(); if (document.fullscreenElement) document.exitFullscreen(); else cv.parentElement.requestFullscreen?.().catch(() => {}); };
 const buCheck = () => {  // vérification : trois bulles pareilles éclatent et ce qui ne tient plus tombe ; deux grappes d'un coup font un combo ; l'arc-en-ciel, la bombe et la pierre
@@ -509,9 +568,19 @@ const buCheck = () => {  // vérification : trois bulles pareilles éclatent et 
   empty(); bu.grid[0][0] = 1; bu.grid[0][1] = 1; bu.grid[1][0] = BU.STONE; bu.grid[0][9] = 0;
   [x, y] = buXY(1, 1, 0); buSnap({x, y, c: 4}); if (bu.grid[1][0] !== BU.STONE) bad.push('la pierre ne casse pas');
   [x, y] = buXY(0, 2, 0); buSnap({x, y, c: 1}); if (bu.grid[1][0] >= 0 || !bu.falling.some(f => f.c === BU.STONE)) bad.push('la pierre tombe');
+  // l'aventure : chaque tableau tient au plafond, a son objectif, ses couleurs de glace existent ailleurs
+  const ka = {...bus.adv}, kf = bus.fish, kc = bus.chests;
+  BU_ADV.forEach((L, i) => { bu = null; buNew(i); const [loose] = buDrop(); if (loose) bad.push('niveau ' + (i + 1) + ' : ' + loose + ' bulles en l’air');
+    if (L[1] === 'poissons' && !bu.fishN || L[1] === 'coffre' && !bu.chestN) bad.push('niveau ' + (i + 1) + ' sans objectif');
+    const cols = new Set(bu.grid.flat().map(buC).filter(c => c >= 0)); if (bu.grid.flat().some(v => v >= BU.ICE && !cols.has(v - BU.ICE))) bad.push('niveau ' + (i + 1) + ' : glace sans sa couleur'); });
+  bu = null; buNew(2); [x, y] = buXY(2, 6, 0); buSnap({x, y, c: 3}); if (!(bu.chestsDown === 1 && bu.mode === 'won' && bu.stars === 3)) bad.push('le coffre ne tombe pas');
+  empty(); bu.adv = -1; bu.grid[0][3] = 1; bu.grid[0][4] = BU.FISH + 1; bu.grid[0][9] = 0; [x, y] = buXY(0, 5, 0); buSnap({x, y, c: 1}); if (bu.freed !== 1) bad.push('le poisson n’est pas libéré');
+  empty(); bu.grid[0][3] = BU.ICE + 2; bu.grid[0][5] = 2; bu.grid[0][9] = 0; [x, y] = buXY(0, 4, 0); buSnap({x, y, c: 2}); if (bu.grid[0][3] >= 0) bad.push('la glace ne dégèle pas');
+  empty(); bu.grid[0][9] = BU.MAG; bu.shot = {x: 104, y: 160, vx: 0, vy: -BU.SPEED, c: 1}; for (let i = 0; i < 40 && bu.shot; i++) buUpdate(); const near = bu.grid.flat().indexOf(1); if (!(bu.grid[0].indexOf(1) > 6 || bu.grid[1].indexOf(1) > 6)) bad.push('l’aimant n’attire pas : ' + near);
+  bus.adv = ka; bus.fish = kf; bus.chests = kc;
   bu = keep; bus.popped = kp; return bad.length ? bad.join(', ') : 'ok';
 };
-cv.__bu = {st: () => bu, check: buCheck, BU};  // pour l'auto-test
+cv.__bu = {st: () => bu, check: buCheck, BU, adv: buNew, snap: buSnap, xy: buXY};  // pour l'auto-test
 console.assert(buCheck() === 'ok', 'bulles', buCheck());
 ctx.onOpen(() => { if (!bu) buNew(); if (bu.mode === 'pause' && !bu.user) bu.mode = 'play'; gameLoop(bu, 'bulles', buUpdate, buDraw); buInfo(); });
 

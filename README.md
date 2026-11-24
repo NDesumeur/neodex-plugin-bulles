@@ -4,6 +4,13 @@ Un jeu de tir de bulles : vise, tire vers le plafond, et regroupe les couleurs. 
 
 *English version: [README.en.md](README.en.md)*
 
+
+## Le mode aventure (nouveau en 1.2.0)
+
+Douze niveaux faits main, chacun avec un nombre de tirs et un objectif : vider le tableau, libérer les poissons prisonniers (éclate ou fais tomber leur bulle) ou faire tomber le coffre. Il reste des tirs à la fin ? Ils donnent des points et jusqu'à trois étoiles. Chaque niveau s'ouvre quand le précédent est réussi.
+
+Deux bulles nouvelles : la **bulle de glace** se dégèle quand une bulle se pose contre elle, puis se joue comme les autres ; l'**aimant** attire les tirs qui passent près de lui.
+
 ## Commandes
 
 - **Souris** : viser ; le pointillé montre la trajectoire, rebonds sur les bords compris.

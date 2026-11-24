@@ -4,6 +4,13 @@ A bubble shooter: aim, shoot towards the ceiling, and group the colours. Three m
 
 *Version française : [README.md](README.md)*
 
+
+## Adventure mode (new in 1.2.0)
+
+Twelve handmade levels, each with a number of shots and a goal: clear the board, free the trapped fish (pop or drop their bubble) or drop the chest. Shots left at the end give points and up to three stars. Each level opens once the one before it is cleared.
+
+Two new bubbles: the **ice bubble** thaws when a bubble lands against it, then plays like the others; the **magnet** pulls in shots that pass close by.
+
 ## Controls
 
 - **Mouse**: aim; the dotted line shows the path, wall bounces included.
