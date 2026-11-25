@@ -301,6 +301,9 @@ export default async function (ctx) {
   const saveGames = () => { clearTimeout(gamesTimer); gamesTimer = setTimeout(() => { gamesTimer = null; folder.write('games', games).catch(() => {}); }, 500); };
   const best = (k, v) => { const b = games.best[k]; if (b == null || v > b) { games.best[k] = v; saveGames(); return true; } return false; };
   const gstore = (k, init) => (games[k] ??= init);
+  // les trophées de NeoDex (3.4.8 et plus) : succès et records déclarés dans plugin.json ; sur un NeoDex plus ancien, rien ne se passe
+  const trophy = id => { ctx.games?.unlock(id).catch(() => {}); };
+  const trophyRecord = (id, v) => { if (v != null && Number.isFinite(+v)) ctx.games?.record(id, +v).catch(() => {}); };
 function gameLoop(st, appKey, update, draw) {
   cancelAnimationFrame(st.raf);
   const STEP = 1000 / 60; let acc = 0, last = performance.now();
@@ -549,7 +552,8 @@ document.addEventListener('keydown', e => {
   };
   requestAnimationFrame(loop);
 }
-function buInfo() { showStats([['Meilleur score', games.best.bulles || 0], ['Parties', bus.games], ['Bulles éclatées', bus.popped], ['Aventure', Object.keys(bus.adv).length + ' / ' + BU_ADV.length + ' · ' + Object.values(bus.adv).reduce((a, b) => a + b, 0) + ' étoiles'], ['Poissons libérés', bus.fish], ['Coffres', bus.chests]]); }
+function buInfo() {
+  setTimeout(buTrophies); showStats([['Meilleur score', games.best.bulles || 0], ['Parties', bus.games], ['Bulles éclatées', bus.popped], ['Aventure', Object.keys(bus.adv).length + ' / ' + BU_ADV.length + ' · ' + Object.values(bus.adv).reduce((a, b) => a + b, 0) + ' étoiles'], ['Poissons libérés', bus.fish], ['Coffres', bus.chests]]); }
 function buGrid() {  // les niveaux de l'aventure : chacun s'ouvre quand le précédent est réussi
   $('buGrid').replaceChildren(...BU_ADV.map((L, i) => { const s = bus.adv[i] || 0, b = el('button', 'btn' + (bu?.adv === i ? ' main' : ''), (i + 1) + (s ? ' ' + '*'.repeat(s) : '')); b.title = L[0]; b.disabled = i > 0 && !bus.adv[i - 1]; b.onclick = () => { buNew(i); b.blur(); }; return b; }));
 }
@@ -582,6 +586,14 @@ const buCheck = () => {  // vérification : trois bulles pareilles éclatent et 
 };
 cv.__bu = {st: () => bu, check: buCheck, BU, adv: buNew, snap: buSnap, xy: buXY};  // pour l'auto-test
 console.assert(buCheck() === 'ok', 'bulles', buCheck());
+// les trophées, tirés des statistiques et des records gardés (aussi à l'ouverture : ce qui a été fait avant compte)
+function buTrophies() {
+  const b = games.best.bulles, a = BU_ADV.map((_, i) => bus.adv[i] || 0), sig = [b, bus.games, bus.popped, bus.fish, bus.chests, a.join('')].join(); if (sig === buTrophies.sig) return; buTrophies.sig = sig;
+  trophyRecord('score', b || null); trophyRecord('eclatees', bus.popped || null);
+  if (bus.games >= 1) trophy('premier'); if (bus.popped >= 1000) trophy('mille'); if (bus.popped >= 10000) trophy('dixmille');
+  if (b >= 5000) trophy('s5000'); if (b >= 20000) trophy('s20000'); if (a.some(x => x > 0)) trophy('aventure'); if (a.every(x => x > 0)) trophy('aventure-fin'); if (a.every(x => x >= 3)) trophy('etoiles');
+  if (bus.fish >= 50) trophy('poissons'); if (bus.chests >= 20) trophy('coffres');
+}
 ctx.onOpen(() => { if (!bu) buNew(); if (bu.mode === 'pause' && !bu.user) bu.mode = 'play'; gameLoop(bu, 'bulles', buUpdate, buDraw); buInfo(); });
 
 }

@@ -1,7 +1,7 @@
 {
   "id": "neodex.bulles",
   "name": "Bulles",
-  "version": "1.2.0",
+  "version": "1.3.0",
   "author": "NDesumeur",
   "description": "Jeu de tir de bulles en pixel art : vise à la souris, au clavier ou à la manette (le pointillé montre les rebonds), tire, et regroupe au moins trois bulles de la même couleur pour les faire éclater en gouttes ; tout ce qui ne tient plus au plafond tombe, et plusieurs grappes d'un coup font un combo. Bombe, bulle arc-en-ciel et pierres qui ne cassent jamais ; le plafond descend tous les 7 tirs, X échange la bulle avec la suivante, chaque plateau vidé en amène un nouveau avec une couleur de plus. Plein écran, et l'aquarium s'adapte à la taille de la fenêtre. Un mode aventure de 12 niveaux faits main (libérer les poissons, faire tomber le coffre), avec la bulle de glace et l'aimant.",
   "icon": "icon.png",
@@ -22,5 +22,72 @@
   "sdk": "2.1.0",
   "permissions": [
     "storage"
+  ],
+  "succes": [
+    {
+      "id": "premier",
+      "nom": "Pop !",
+      "texte": "Finir une première partie"
+    },
+    {
+      "id": "mille",
+      "nom": "Éclateur",
+      "texte": "Éclater 1 000 bulles en tout"
+    },
+    {
+      "id": "dixmille",
+      "nom": "Tempête de bulles",
+      "texte": "Éclater 10 000 bulles en tout"
+    },
+    {
+      "id": "s5000",
+      "nom": "Beau score",
+      "texte": "Marquer 5 000 points en une partie"
+    },
+    {
+      "id": "s20000",
+      "nom": "Score de légende",
+      "texte": "Marquer 20 000 points en une partie"
+    },
+    {
+      "id": "aventure",
+      "nom": "Aventurier",
+      "texte": "Réussir un niveau de l'aventure"
+    },
+    {
+      "id": "aventure-fin",
+      "nom": "Bout de l'aventure",
+      "texte": "Réussir les 12 niveaux de l'aventure"
+    },
+    {
+      "id": "etoiles",
+      "nom": "Toutes les étoiles",
+      "texte": "Obtenir 3 étoiles à chaque niveau de l'aventure",
+      "cache": true
+    },
+    {
+      "id": "poissons",
+      "nom": "Sauveteur",
+      "texte": "Libérer 50 poissons"
+    },
+    {
+      "id": "coffres",
+      "nom": "Chasseur de trésors",
+      "texte": "Faire tomber 20 coffres"
+    }
+  ],
+  "records": [
+    {
+      "id": "score",
+      "nom": "Meilleur score",
+      "sens": "haut",
+      "format": "nombre"
+    },
+    {
+      "id": "eclatees",
+      "nom": "Bulles éclatées",
+      "sens": "haut",
+      "format": "nombre"
+    }
   ]
 }
